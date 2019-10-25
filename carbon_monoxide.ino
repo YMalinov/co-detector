@@ -4,14 +4,15 @@
 #define BUZZER_PIN              9
 #define SCREEN_RX_PIN           10 // not used
 #define SCREEN_TX_PIN           11
-#define CO_SENSOR_PIN           12
+#define CO_SENSOR_ANALOGUE_PIN  0
 
-#define ALARM_THRESHOLD         1500 // in ppm
+#define ALARM_THRESHOLD         450 // in ppm
 #define ALARM_TIMEOUT           120 // in seconds
 
 const unsigned long CO_SENSOR_REFRESH_INTERVAL = 500ul;
 const unsigned long ANIM_REFRESH_INTERVAL = 500ul;
 const unsigned long SCREEN_ALARM_FLASH_INTERVAL = 300ul;
+const unsigned long SCREEN_REFRESH_INTERVAL = 500ul;
 
 unsigned long lastProxMillis = 0ul;
 unsigned long lastCoMillis = 0ul;
@@ -22,8 +23,7 @@ unsigned long lastScreenAlarmMillis = 0ul;
 // <screen>
 #define SCREEN_BAUDRATE         9600
 #define SCREEN_BRIGHTNESS       0x9D // 0x9D means fully on
-#define SCREEN_TIMEOUT          10 // 60 // in seconds
-#define SCREEN_REFRESH_INTERVAL 500
+#define SCREEN_TIMEOUT          60 // in seconds
 
 unsigned long screenOnTimestamp = 0ul;
 bool screenOn = false;
@@ -38,7 +38,7 @@ int animationIndex = 0;
 // </screen_animation>
 
 // <co_sensor>
-
+int coSensorValue = 0; // for caching inbetween reads
 // </co_sensor>
 
 // <buzzer>
@@ -52,10 +52,6 @@ bool alarmFired = false; // so that we know when it has timed out
 unsigned long second = 1000ul; // in milliseconds
 // </common>
 
-// WIP: for mocking the CO sensor
-unsigned long lastCoUpdateMillis = 0ul;
-int coSensorValue = 985;
-
 void setup() {
      // Serial.begin(9600); // for debugging purposes
 
@@ -63,9 +59,6 @@ void setup() {
     screen.begin(SCREEN_BAUDRATE);
     turnScreenOn(0);
     // </screen>
-
-    // <co_sensor>
-    // </co_sensor>
 
     // <prox_sensor>
     pinMode(PROX_SENSOR_PIN, INPUT);
@@ -139,18 +132,14 @@ int getSecsSinceAlarmOn() {
 }
 
 int getCOReading() {
-//    return 1000; // hardcoded - still don't have sensor at hand
-
     unsigned long now = millis();
-    if (now - lastCoUpdateMillis > second) {
-        coSensorValue++;
-        lastCoUpdateMillis = now;
+    if (now - lastCoMillis < CO_SENSOR_REFRESH_INTERVAL) {
+       return coSensorValue;
     }
 
-    if (coSensorValue > 1020) {
-        coSensorValue = 990;
-    }
-    
+    lastCoMillis = now;
+    coSensorValue = analogRead(CO_SENSOR_ANALOGUE_PIN);
+
     return coSensorValue;
 }
 
