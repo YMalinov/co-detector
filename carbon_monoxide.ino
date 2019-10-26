@@ -6,12 +6,13 @@
 #define SCREEN_TX_PIN           11
 #define CO_SENSOR_ANALOGUE_PIN  0
 
-#define ALARM_THRESHOLD         450 // in ppm
+#define ALARM_THRESHOLD         400 // in ppm
 #define ALARM_TIMEOUT           120 // in seconds
+#define ALARM_RESPONSE_TIME     15  // in minutes
 
 const unsigned long CO_SENSOR_REFRESH_INTERVAL = 500ul;
 const unsigned long ANIM_REFRESH_INTERVAL = 500ul;
-const unsigned long SCREEN_ALARM_FLASH_INTERVAL = 300ul;
+const unsigned long SCREEN_ALARM_FLASH_INTERVAL = 400ul;
 const unsigned long SCREEN_REFRESH_INTERVAL = 500ul;
 
 unsigned long lastProxMillis = 0ul;
@@ -19,6 +20,11 @@ unsigned long lastCoMillis = 0ul;
 unsigned long lastScreenMillis = 0ul;
 unsigned long lastAnimMillis = 0ul;
 unsigned long lastScreenAlarmMillis = 0ul;
+
+// We're gonna want the audible alarm to sound, only after it's been 20 minutes of dangerous CO
+// levels. We're going to write since when the CO levels have been dangerous here. Once it has have
+// ALARM_RESPONSE_TIME minutes, then we're gonna sound the alarm.
+unsigned long reachedAlarmThresholdMillis = 0ul;
 
 // <screen>
 #define SCREEN_BAUDRATE         9600
@@ -68,13 +74,15 @@ void setup() {
 void loop() {
     int coReading = getCOReading();
     if (!inAlarm && !alarmFired && coReading >= ALARM_THRESHOLD) {
-        fireAlarm();
-        turnScreenOn(coReading);
+        if (needAudibleAlarm(coReading)) {
+            fireAlarm();
+            turnScreenOn(coReading);
+        }
     } else if (inAlarm) {
         // OK, so alarm is on - should we turn it off?
-        if (coReading < ALARM_THRESHOLD) {
-            forgoAlarm();
-        }
+        // if (coReading < ALARM_THRESHOLD) {
+        //     forgoAlarm();
+        // }
 
         if (getSecsSinceAlarmOn() >= ALARM_TIMEOUT) {
             alarmFired = true;
@@ -84,7 +92,7 @@ void loop() {
 
     if (coReading < ALARM_THRESHOLD) {
         alarmFired = false;
-        
+
         if (screenOn && screenOffFlash) {
             initScreenStaticValues();
         }
@@ -96,7 +104,7 @@ void loop() {
     } else if (screenOn) {
         refreshScreenDynamicValues(coReading);
         refreshScreenAnimation();
-      
+
         // OK, so screen is ON - should we turn it off?
         if (getSecsSinceScreenOn() >= SCREEN_TIMEOUT) {
             turnScreenOff();
@@ -109,10 +117,31 @@ void loop() {
     }
 }
 
+bool needAudibleAlarm(int coReading) {
+    if (coReading < ALARM_THRESHOLD) {
+        reachedAlarmThresholdMillis = 0ul;
+        return false;
+    }
+
+    if (reachedAlarmThresholdMillis == 0ul) {
+        reachedAlarmThresholdMillis = millis();
+        return false;
+    }
+
+    unsigned long alarmResponseTimeInMillis = ALARM_RESPONSE_TIME * second * 60;
+    if (millis() - reachedAlarmThresholdMillis > alarmResponseTimeInMillis) {
+        Serial.println("need alarm");
+        return true;
+    }
+
+    Serial.println("don't need alarm");
+    return false;
+}
+
 void fireAlarm() {
     inAlarm = true;
     alarmOnTimestamp = millis();
-    
+
     tone(BUZZER_PIN, buzzerTone);
 }
 
@@ -156,22 +185,22 @@ void initScreenStaticValues() {
 
 void initScreenSecondLine() {
     // the second line is easy, as it's static
-    //     'CO alarm @ 1000'
+    //     'CO bad @>400/15m'
 
     changeCursorPosition(16);
-    screen.write(("CO alarm @ " + String(ALARM_THRESHOLD) + " ").c_str());
+    screen.write(("CO bad @>" + String(ALARM_THRESHOLD) + "/" + String(ALARM_RESPONSE_TIME) + "m").c_str());
 }
 
 void refreshScreenDynamicValues(int coReading) {
     unsigned long now = millis();
-  
+
     // Let's first see if we need to refresh the screen as per its refresh interval
     if (now - lastScreenMillis < SCREEN_REFRESH_INTERVAL) {
         return;
     }
 
     lastScreenMillis = now;
-  
+
     // We need to update the ppm reading, as well as the seconds remaining till screen timeout.
     // Both get written on the second line.
     //     '1000ppm / 999s  '
@@ -186,7 +215,7 @@ void refreshScreenDynamicValues(int coReading) {
 
 void refreshScreenInAlarm() {
     unsigned long now = millis();
-  
+
     // Let's first see if we need to refresh the screen as per its refresh interval
     if (now - lastScreenAlarmMillis < SCREEN_ALARM_FLASH_INTERVAL) {
         return;
@@ -206,14 +235,14 @@ void refreshScreenInAlarm() {
 
 void refreshScreenAnimation() {
     unsigned long now = millis();
-  
+
     // Let's first see if we need to refresh the animation as per its refresh interval
     if (now - lastAnimMillis < ANIM_REFRESH_INTERVAL) {
         return;
     }
 
     lastAnimMillis = now;
-    
+
     // update the animation (last symbol on line)
     changeCursorPosition(15);
     screen.write(animationChars[animationIndex]);
@@ -235,13 +264,13 @@ int getSecsSinceScreenOn() {
 void turnScreenOn(int coReading) {
     screenOnTimestamp = millis();
     screenOn = true;
-    
+
     clearScreen();
-  
+
     // turn display on
     screen.write(0xFE);
     screen.write(0x0C);
-  
+
     // turn backlight on
     screen.write(0x7C);
     screen.write(SCREEN_BRIGHTNESS);
@@ -253,13 +282,13 @@ void turnScreenOn(int coReading) {
 
 void turnScreenOff() {
     screenOn = false;
-    
+
     clearScreen();
-  
+
     // turn display off
     screen.write(0xFE);
     screen.write(0x08);
-  
+
     // turn backlight off
     screen.write(0x7C);
     screen.write(0x80); // off
@@ -276,7 +305,7 @@ void changeCursorPosition(int pos) {
     if (pos > 15) {
       pos = (pos - 16) + 64;
     }
-  
+
     screen.write(0xFE);
     screen.write(pos + 128);
 }
@@ -284,7 +313,7 @@ void changeCursorPosition(int pos) {
 void writeValueRightToLeft(String val, int pos, int maxLen) {
     for (int i = val.length() - 1, j = 0, len = 0; len < maxLen; i--, j++, len++) {
         changeCursorPosition(pos - j);
-  
+
         if (i >= 0) {
             screen.write(val[i]);
         } else {
