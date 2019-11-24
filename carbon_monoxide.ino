@@ -59,7 +59,7 @@ unsigned long second = 1000ul; // in milliseconds
 // </common>
 
 void setup() {
-     // Serial.begin(9600); // for debugging purposes
+    // Serial.begin(9600); // for debugging purposes
 
     // <screen>
     screen.begin(SCREEN_BAUDRATE);
@@ -79,11 +79,6 @@ void loop() {
             turnScreenOn(coReading);
         }
     } else if (inAlarm) {
-        // OK, so alarm is on - should we turn it off?
-        // if (coReading < ALARM_THRESHOLD) {
-        //     forgoAlarm();
-        // }
-
         if (getSecsSinceAlarmOn() >= ALARM_TIMEOUT) {
             alarmFired = true;
             forgoAlarm();
@@ -91,9 +86,13 @@ void loop() {
     }
 
     if (coReading < ALARM_THRESHOLD) {
+        // reset counters now that reading is under dangerous levels
+        reachedAlarmThresholdMillis = 0ul;
+
         alarmFired = false;
 
         if (screenOn && screenOffFlash) {
+            screenOffFlash = false;
             initScreenStaticValues();
         }
     }
@@ -118,11 +117,6 @@ void loop() {
 }
 
 bool needAudibleAlarm(int coReading) {
-    if (coReading < ALARM_THRESHOLD) {
-        reachedAlarmThresholdMillis = 0ul;
-        return false;
-    }
-
     if (reachedAlarmThresholdMillis == 0ul) {
         reachedAlarmThresholdMillis = millis();
         return false;
@@ -130,11 +124,11 @@ bool needAudibleAlarm(int coReading) {
 
     unsigned long alarmResponseTimeInMillis = ALARM_RESPONSE_TIME * second * 60;
     if (millis() - reachedAlarmThresholdMillis > alarmResponseTimeInMillis) {
-        Serial.println("need alarm");
+        // Serial.println("need alarm");
         return true;
     }
 
-    Serial.println("don't need alarm");
+    // Serial.println("don't need alarm");
     return false;
 }
 
@@ -321,4 +315,3 @@ void writeValueRightToLeft(String val, int pos, int maxLen) {
         }
     }
 }
-
