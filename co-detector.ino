@@ -1,14 +1,14 @@
 #include <SoftwareSerial.h> // used by display
 
-#define PROX_SENSOR_PIN         6
-#define BUZZER_PIN              9
-#define SCREEN_RX_PIN           10 // not used
-#define SCREEN_TX_PIN           11
-#define CO_SENSOR_ANALOGUE_PIN  0
+const unsigned int PROX_SENSOR_PIN = 6;
+const unsigned int BUZZER_PIN = 9;
+const unsigned int SCREEN_RX_PIN = 10; // not used
+const unsigned int SCREEN_TX_PIN = 11;
+const unsigned int CO_SENSOR_ANALOGUE_PIN = 0;
 
-#define ALARM_THRESHOLD         400 // in ppm
-#define ALARM_TIMEOUT           120 // in seconds
-#define ALARM_RESPONSE_TIME     15  // in minutes
+const unsigned int ALARM_THRESHOLD = 400; // in ppm
+const unsigned int ALARM_TIMEOUT = 120; // in seconds
+const unsigned int ALARM_RESPONSE_TIME = 15;  // in minutes
 
 const unsigned long CO_SENSOR_REFRESH_INTERVAL = 500ul;
 const unsigned long ANIM_REFRESH_INTERVAL = 500ul;
@@ -27,9 +27,9 @@ unsigned long lastScreenAlarmMillis = 0ul;
 unsigned long reachedAlarmThresholdMillis = 0ul;
 
 // <screen>
-#define SCREEN_BAUDRATE         9600
-#define SCREEN_BRIGHTNESS       0x9D // 0x9D means fully on
-#define SCREEN_TIMEOUT          60 // in seconds
+const unsigned int SCREEN_BAUDRATE = 9600;
+const unsigned int SCREEN_BRIGHTNESS = 0x9D; // 0x9D means fully on
+const unsigned int SCREEN_TIMEOUT = 60; // in seconds
 
 unsigned long screenOnTimestamp = 0ul;
 bool screenOn = false;
@@ -56,10 +56,11 @@ bool alarmFired = false; // so that we know when it has timed out
 
 // <common>
 unsigned long second = 1000ul; // in milliseconds
+int incomingByte = 0;
 // </common>
 
 void setup() {
-    // Serial.begin(9600); // for debugging purposes
+    Serial.begin(9600);
 
     // <screen>
     screen.begin(SCREEN_BAUDRATE);
@@ -112,6 +113,14 @@ void loop() {
         // If we're in an alarm, we should flash the first (static) line of the screen
         if (inAlarm) {
             refreshScreenInAlarm();
+        }
+    }
+
+    // if asked, respond with readings on serial too
+    if (Serial.available() > 0) {
+        incomingByte = Serial.read();
+        if (incomingByte == 'r') {
+            Serial.println(coReading);
         }
     }
 }
