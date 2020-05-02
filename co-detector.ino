@@ -64,7 +64,7 @@ void setup() {
 
     // <screen>
     screen.begin(SCREEN_BAUDRATE);
-    turnScreenOn(0);
+    turnScreenOff();
     // </screen>
 
     // <prox_sensor>
